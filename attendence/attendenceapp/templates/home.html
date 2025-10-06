@@ -3,133 +3,511 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance System</title>
+    <title>Face Recognition Attendance System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f0fff4; }
-        .container { max-width: 800px; }
+        body { background: linear-gradient(135deg, #f0fff4 0%, #dcfce7 100%); }
+        .container { max-width: 900px; }
         .video-container, .captured-container { position: relative; }
+        
+        /* Enhanced status message with animations */
         .status-message { 
             display: none; 
             opacity: 0; 
-            transition: opacity 0.3s; 
+            transition: all 0.4s ease-in-out; 
             position: fixed; 
             top: 20px; 
             left: 50%; 
-            transform: translateX(-50%); 
+            transform: translateX(-50%) translateY(-10px); 
             background-color: #fff; 
-            padding: 12px 20px; 
-            border-radius: 8px; 
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
-            z-index: 1000; 
+            padding: 16px 24px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); 
+            z-index: 1000;
+            min-width: 300px;
+            text-align: center;
+            border-left: 4px solid #10b981;
         }
-        .status-message.show { display: block; opacity: 1; }
-        button { transition: background-color 0.3s; }
+        .status-message.show { 
+            display: block; 
+            opacity: 1; 
+            transform: translateX(-50%) translateY(0);
+        }
+        .status-message.error { border-left-color: #ef4444; }
+        .status-message.success { border-left-color: #10b981; }
+        
+        /* Button hover effects */
+        button { 
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4); }
+        button:active { transform: translateY(0); }
+        button:disabled { 
+            opacity: 0.6; 
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Loading spinner */
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Video frame overlay */
+        .video-frame {
+            border: 3px solid #10b981;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .video-frame::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%;
+            height: 80%;
+            border: 2px dashed rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Pulse animation for live indicator */
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Captured image success border */
+        .captured-success {
+            border: 3px solid #10b981;
+            animation: successPulse 0.6s ease-in-out;
+        }
+        @keyframes successPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        
+        /* Responsive improvements */
         @media (max-width: 640px) {
             .status-message { 
                 top: 10px; 
-                left: 50%; 
-                transform: translateX(-50%); 
-                margin: 0 auto; 
-                width: calc(100% - 20px); 
+                width: calc(100% - 40px);
+                min-width: auto;
             }
+            .container { padding: 1rem; }
         }
+        
+        /* Accessibility focus states */
+        button:focus, a:focus {
+            outline: 3px solid #10b981;
+            outline-offset: 2px;
+        }
+        
+        /* Camera permission info */
+        .info-banner {
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-left: 4px solid #3b82f6;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .info-banner.show { display: block; }
     </style>
 </head>
-<body class="min-h-screen flex items-center justify-center bg-green-50">
-    <div class="container mx-auto p-6 bg-white rounded-lg shadow-md">
+<body class="min-h-screen flex items-center justify-center">
+    <div class="container mx-auto p-6 bg-white rounded-2xl shadow-2xl">
+        <!-- Logo Section -->
         <div class="flex justify-center mb-6">
-            <img src="https://media.licdn.com/dms/image/v2/D4D16AQFvq2svsbNc6w/profile-displaybackgroundimage-shrink_350_1400/B4DZkx8tOoG8AY-/0/1757479623827?e=1761782400&v=beta&t=dpplXLoOEoaQepD7gGCzJWc92Za6djBiAqwp7p0yoyg" alt="Logo" class="h-20 w-auto">
+            <img src="https://media.licdn.com/dms/image/v2/D4D16AQFvq2svsbNc6w/profile-displaybackgroundimage-shrink_350_1400/B4DZkx8tOoG8AY-/0/1757479623827?e=1761782400&v=beta&t=dpplXLoOEoaQepD7gGCzJWc92Za6djBiAqwp7p0yoyg" 
+                 alt="Company Logo" 
+                 class="h-20 w-auto object-contain"
+                 onerror="this.style.display='none'">
         </div>
-        <h1 class="text-3xl font-semibold text-center text-green-700 mb-6">Face Recognition Attendance</h1>
-        <form id="recognitionForm">
+        
+        <!-- Title -->
+        <h1 class="text-3xl md:text-4xl font-bold text-center text-green-700 mb-2">
+            Face Recognition Attendance
+        </h1>
+        <p class="text-center text-gray-600 mb-6">Secure, Fast, and Contactless</p>
+        
+        <!-- Info Banner -->
+        <div id="infoBanner" class="info-banner">
+            <p class="text-sm text-blue-800">
+                <strong>📷 Camera Access Required:</strong> Please allow camera permissions when prompted for face recognition to work.
+            </p>
+        </div>
+        
+        <!-- Main Form -->
+        <form id="recognitionForm" aria-label="Face recognition attendance form">
             {% csrf_token %}
-            <div class="flex flex-col md:flex-row gap-4">
-                <!-- Webcam Feed -->
+            
+            <div class="flex flex-col md:flex-row gap-6">
+                <!-- Webcam Feed Section -->
                 <div class="video-container w-full md:w-1/2">
-                    <h2 class="text-lg font-medium text-green-600 mb-2">Live Webcam</h2>
-                    <video id="video" width="320" height="240" autoplay class="w-full rounded-md border border-green-200"></video>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-lg font-semibold text-green-700">
+                            <span class="live-indicator"></span>Live Webcam
+                        </h2>
+                        <span id="cameraStatus" class="text-xs text-gray-500">Initializing...</span>
+                    </div>
+                    <div class="video-frame">
+                        <video id="video" 
+                               width="320" 
+                               height="240" 
+                               autoplay 
+                               playsinline
+                               muted
+                               class="w-full rounded-lg"
+                               aria-label="Live webcam feed"></video>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2 text-center">
+                        Position your face within the frame
+                    </p>
                 </div>
-                <!-- Captured Image -->
+                
+                <!-- Captured Image Section -->
                 <div class="captured-container w-full md:w-1/2">
-                    <h2 class="text-lg font-medium text-green-600 mb-2">Captured Image</h2>
-                    <img id="capturedImage" src="" class="w-full rounded-md border border-green-200" style="display:none;" alt="Captured Image">
+                    <h2 class="text-lg font-semibold text-green-700 mb-3">Captured Image</h2>
+                    <div class="video-frame min-h-[240px] flex items-center justify-center bg-gray-50">
+                        <img id="capturedImage" 
+                             src="" 
+                             class="w-full rounded-lg" 
+                             style="display:none;" 
+                             alt="Captured face image">
+                        <p id="placeholderText" class="text-gray-400 text-center px-4">
+                            Click "Capture Image" to take a photo
+                        </p>
+                    </div>
+                    <p id="captureInfo" class="text-xs text-green-600 mt-2 text-center" style="display:none;">
+                        ✓ Image captured successfully
+                    </p>
                 </div>
             </div>
-            <div class="flex justify-center gap-4 mt-6">
-                <button type="button" onclick="captureImage()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700">Capture Image</button>
-                <button type="button" onclick="submitImage()" id="submitButton" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700" style="display:none;">Submit for Recognition</button>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row justify-center gap-4 mt-8">
+                <button type="button" 
+                        onclick="captureImage()" 
+                        id="captureButton"
+                        class="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 font-medium shadow-md flex items-center justify-center"
+                        aria-label="Capture image from webcam">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Capture Image
+                </button>
+                
+                <button type="button" 
+                        onclick="submitImage()" 
+                        id="submitButton" 
+                        class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 font-medium shadow-md flex items-center justify-center"
+                        style="display:none;"
+                        aria-label="Submit captured image for recognition">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Submit for Recognition
+                </button>
+                
+                <button type="button" 
+                        onclick="retakeImage()" 
+                        id="retakeButton" 
+                        class="bg-gray-600 text-white px-8 py-3 rounded-lg hover:bg-gray-700 font-medium shadow-md flex items-center justify-center"
+                        style="display:none;"
+                        aria-label="Retake image">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Retake
+                </button>
             </div>
-            <div id="status" class="status-message mt-4 text-center text-lg font-medium text-green-800"></div>
+            
+            <!-- Status Message -->
+            <div id="status" 
+                 class="status-message" 
+                 role="alert" 
+                 aria-live="polite"></div>
         </form>
-        <div class="flex justify-center mt-6 gap-2">
-            <a href="/admin/" class="bg-green-500 text-white px-2 py-1 rounded-md hover:bg-green-700 text-sm">admin</a>
-            <a href="/attendance/" class="bg-green-500 text-white px-2 py-1 rounded-md hover:bg-green-700 text-sm">view report</a>
+        
+        <!-- Quick Links -->
+        <div class="flex flex-wrap justify-center mt-8 gap-3">
+            <a href="/admin/" 
+               class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-all shadow-md text-sm font-medium flex items-center"
+               aria-label="Go to admin panel">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Admin Panel
+            </a>
+            <a href="/attendance/" 
+               class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-all shadow-md text-sm font-medium flex items-center"
+               aria-label="View attendance report">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                View Reports
+            </a>
+        </div>
+        
+        <!-- Footer Info -->
+        <div class="text-center mt-6 text-xs text-gray-500">
+            <p>Powered by AI Face Recognition Technology</p>
         </div>
     </div>
+    
     <script>
         let capturedDataUrl = '';
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                document.getElementById('video').srcObject = stream;
-            })
-            .catch(err => {
-                showStatus('Camera access denied: ' + err, 'text-red-600');
-            });
-
-        function captureImage() {
-            const canvas = document.createElement('canvas');
-            const video = document.getElementById('video');
-            canvas.width = 320;
-            canvas.height = 240;
-            canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
-            capturedDataUrl = canvas.toDataURL('image/png');
-            const capturedImage = document.getElementById('capturedImage');
-            capturedImage.src = capturedDataUrl;
-            capturedImage.style.display = 'block';
-            document.getElementById('submitButton').style.display = 'block';
-            showStatus('Image captured. Click Submit to proceed.', 'text-green-600');
+        let videoStream = null;
+        
+        // Initialize camera with error handling
+        async function initializeCamera() {
+            try {
+                const constraints = {
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    }
+                };
+                
+                videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const videoElement = document.getElementById('video');
+                videoElement.srcObject = videoStream;
+                
+                // Update camera status
+                document.getElementById('cameraStatus').textContent = 'Connected';
+                document.getElementById('cameraStatus').classList.add('text-green-600');
+                
+            } catch (err) {
+                console.error('Camera access error:', err);
+                document.getElementById('cameraStatus').textContent = 'Camera unavailable';
+                document.getElementById('cameraStatus').classList.add('text-red-600');
+                
+                showStatus('Camera access denied. Please enable camera permissions in your browser settings.', 'error');
+                document.getElementById('captureButton').disabled = true;
+                document.getElementById('infoBanner').classList.add('show');
+            }
         }
 
-        function submitImage() {
+        // Capture image with enhanced feedback
+        function captureImage() {
+            try {
+                const canvas = document.createElement('canvas');
+                const video = document.getElementById('video');
+                
+                // Check if video is ready
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    showStatus('Please wait for camera to initialize', 'error');
+                    return;
+                }
+                
+                canvas.width = 640;
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, 640, 480);
+                
+                capturedDataUrl = canvas.toDataURL('image/png');
+                
+                const capturedImage = document.getElementById('capturedImage');
+                capturedImage.src = capturedDataUrl;
+                capturedImage.style.display = 'block';
+                capturedImage.classList.add('captured-success');
+                
+                document.getElementById('placeholderText').style.display = 'none';
+                document.getElementById('captureInfo').style.display = 'block';
+                document.getElementById('submitButton').style.display = 'flex';
+                document.getElementById('retakeButton').style.display = 'flex';
+                document.getElementById('captureButton').style.display = 'none';
+                
+                showStatus('Image captured successfully! Click Submit to proceed.', 'success');
+                
+                // Play capture sound (optional - can add audio element)
+                // new Audio('/static/capture-sound.mp3').play().catch(() => {});
+                
+            } catch (err) {
+                console.error('Capture error:', err);
+                showStatus('Failed to capture image. Please try again.', 'error');
+            }
+        }
+
+        // Retake image function
+        function retakeImage() {
+            capturedDataUrl = '';
+            document.getElementById('capturedImage').style.display = 'none';
+            document.getElementById('capturedImage').classList.remove('captured-success');
+            document.getElementById('placeholderText').style.display = 'block';
+            document.getElementById('captureInfo').style.display = 'none';
+            document.getElementById('submitButton').style.display = 'none';
+            document.getElementById('retakeButton').style.display = 'none';
+            document.getElementById('captureButton').style.display = 'flex';
+            showStatus('Ready to capture a new image', 'success');
+        }
+
+        // Submit image with loading state
+        async function submitImage() {
             if (!capturedDataUrl) {
-                showStatus('No image captured.', 'text-red-600');
+                showStatus('No image captured.', 'error');
                 return;
             }
-            showStatus('Processing...', 'text-green-600');
-            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            fetch('/recognize/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': csrftoken
-                },
-                body: 'image=' + encodeURIComponent(capturedDataUrl)
-            })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
-                return res.json();
-            })
-            .then(data => {
-                showStatus(data.message, data.status === 'success' ? 'text-green-600' : 'text-red-600');
-                if (data.status === 'success') {
-                    document.getElementById('capturedImage').style.display = 'none';
-                    document.getElementById('submitButton').style.display = 'none';
-                    capturedDataUrl = '';
+            
+            const submitBtn = document.getElementById('submitButton');
+            const originalText = submitBtn.innerHTML;
+            
+            // Disable buttons and show loading
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner"></span>Processing...';
+            document.getElementById('retakeButton').disabled = true;
+            
+            showStatus('Processing face recognition...', 'success');
+            
+            try {
+                const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const response = await fetch('/recognize/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrftoken
+                    },
+                    body: 'image=' + encodeURIComponent(capturedDataUrl)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
                 }
-            })
-            .catch(err => {
-                showStatus('Error: ' + err.message, 'text-red-600');
-            });
+                
+                const data = await response.json();
+                
+                showStatus(data.message, data.status === 'success' ? 'success' : 'error');
+                
+                if (data.status === 'success') {
+                    // Success - reset form after delay
+                    setTimeout(() => {
+                        resetForm();
+                    }, 2000);
+                } else {
+                    // Failed - allow retry
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                    document.getElementById('retakeButton').disabled = false;
+                }
+                
+            } catch (err) {
+                console.error('Submission error:', err);
+                showStatus('Error: ' + err.message + '. Please try again.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+                document.getElementById('retakeButton').disabled = false;
+            }
         }
 
-        function showStatus(message, colorClass) {
+        // Reset form to initial state
+        function resetForm() {
+            capturedDataUrl = '';
+            document.getElementById('capturedImage').style.display = 'none';
+            document.getElementById('capturedImage').classList.remove('captured-success');
+            document.getElementById('placeholderText').style.display = 'block';
+            document.getElementById('captureInfo').style.display = 'none';
+            document.getElementById('submitButton').style.display = 'none';
+            document.getElementById('submitButton').disabled = false;
+            document.getElementById('submitButton').innerHTML = '<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>Submit for Recognition';
+            document.getElementById('retakeButton').style.display = 'none';
+            document.getElementById('retakeButton').disabled = false;
+            document.getElementById('captureButton').style.display = 'flex';
+        }
+
+        // Enhanced status message display
+        function showStatus(message, type) {
             const status = document.getElementById('status');
             status.textContent = message;
-            status.classList.remove('text-green-600', 'text-red-600');
-            status.classList.add(colorClass, 'show');
-            setTimeout(() => status.classList.remove('show'), 5000);
+            status.classList.remove('text-green-600', 'text-red-600', 'success', 'error');
+            
+            if (type === 'success') {
+                status.classList.add('text-green-600', 'success');
+            } else if (type === 'error') {
+                status.classList.add('text-red-600', 'error');
+            }
+            
+            status.classList.add('show');
+            
+            setTimeout(() => {
+                status.classList.remove('show');
+            }, 5000);
         }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'c' && e.ctrlKey) {
+                e.preventDefault();
+                if (document.getElementById('captureButton').style.display !== 'none') {
+                    captureImage();
+                }
+            } else if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                if (document.getElementById('submitButton').style.display !== 'none') {
+                    submitImage();
+                }
+            } else if (e.key === 'r' && e.ctrlKey) {
+                e.preventDefault();
+                if (document.getElementById('retakeButton').style.display !== 'none') {
+                    retakeImage();
+                }
+            }
+        });
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            initializeCamera();
+            
+            // Hide info banner after 10 seconds
+            setTimeout(() => {
+                document.getElementById('infoBanner').classList.remove('show');
+            }, 10000);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Handle visibility change to pause/resume camera
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && videoStream) {
+                videoStream.getVideoTracks().forEach(track => track.enabled = false);
+            } else if (!document.hidden && videoStream) {
+                videoStream.getVideoTracks().forEach(track => track.enabled = true);
+            }
+        });
     </script>
 </body>
 </html>
